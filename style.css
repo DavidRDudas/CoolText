@@ -70,6 +70,24 @@ kbd {
   background: var(--bg-card);
 }
 
+/* ---------- Icons ---------- */
+
+.icon {
+  width: 1.1em;
+  height: 1.1em;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex: none;
+  display: block;
+}
+.icon-fill { fill: currentColor; stroke: none; }
+.icon-btn .icon { width: 18px; height: 18px; }
+.theme-icon-dark, .theme-icon-light, .listen-icon-play, .listen-icon-stop,
+.rsvp-icon-play, .rsvp-icon-pause { display: flex; align-items: center; }
+
 /* ---------- Shared bits ---------- */
 
 .icon-btn {
@@ -147,7 +165,7 @@ kbd {
   padding: 1.4rem 2rem;
 }
 .brand { display: flex; align-items: center; gap: 0.6rem; font-weight: 800; font-size: 1.15rem; letter-spacing: -0.02em; }
-.brand-mark { font-size: 1.35rem; }
+.brand-mark { width: 28px; height: 28px; border-radius: 8px; }
 
 .hero {
   position: relative;
@@ -247,12 +265,12 @@ kbd {
   width: 52px; height: 52px;
   margin: 0 auto 0.9rem;
   display: flex; align-items: center; justify-content: center;
-  font-size: 1.4rem;
   color: #fff;
   background: var(--gradient);
   border-radius: 50%;
   box-shadow: 0 8px 20px -4px rgb(124 108 255 / 0.5);
 }
+.dropzone-icon .icon { width: 22px; height: 22px; }
 .dropzone.dragover .dropzone-icon { animation: bounce 0.6s ease infinite alternate; }
 @keyframes bounce { to { transform: translateY(-6px); } }
 .dropzone-title { font-weight: 700; margin-bottom: 0.3rem; }
@@ -293,6 +311,27 @@ kbd {
 .paste-input:focus { outline: none; border-color: var(--accent); }
 .paste-actions { display: flex; justify-content: flex-end; margin-top: 0.8rem; }
 
+.url-row { display: flex; gap: 0.6rem; }
+.url-input {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg-card);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.8rem 1rem;
+  font-family: inherit;
+  font-size: 0.95rem;
+  transition: border-color 0.2s;
+}
+.url-input:focus { outline: none; border-color: var(--accent); }
+.tab-hint {
+  margin-top: 0.8rem;
+  color: var(--text-faint);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
 .intake-footer { text-align: center; padding: 0.9rem 0 0.6rem; }
 
 .feature-row {
@@ -317,7 +356,8 @@ kbd {
   line-height: 1.45;
 }
 .feature-row strong { color: var(--text); font-size: 0.95rem; }
-.feature-emoji { font-size: 1.3rem; }
+.feature-icon { color: var(--accent); margin-bottom: 0.2rem; }
+.feature-icon .icon { width: 22px; height: 22px; }
 
 .landing-footer {
   position: relative; z-index: 1;
@@ -382,7 +422,7 @@ kbd {
 .insight-chip {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.45rem;
   padding: 0.38rem 0.8rem;
   background: var(--bg-card);
   border: 1px solid var(--border);
@@ -391,6 +431,7 @@ kbd {
   color: var(--text-dim);
 }
 .insight-chip b { color: var(--text); font-weight: 600; }
+.insight-chip .icon { width: 14px; height: 14px; color: var(--accent); }
 
 .text-container {
   max-width: 46rem;

@@ -1,7 +1,7 @@
 /* CoolText service worker — cache-first so the app works offline.
    Bump the version when shipping changes to any cached asset. */
 
-const CACHE = 'cooltext-v1';
+const CACHE = 'cooltext-v2';
 const ASSETS = [
   '.',
   'index.html',

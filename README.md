@@ -1,17 +1,18 @@
-# 📖 CoolText
+# CoolText
 
 **Make PDFs cool again.** Drop in a PDF, Word doc, or pasted text and turn reading into an experience.
 
 ## What it does
 
 - **Upload anything** — PDF, Word (`.docx`), plain text, or Markdown, or just paste text. Drag & drop supported.
-- **🎧 Listen** — natural read-aloud (Web Speech API) with karaoke-style live word highlighting and auto-scroll. While listening, the rest of the page dims like a cinema so only the spoken paragraph stays lit. Click any word to start from there.
-- **⚡ Focus mode** — RSVP speed reading: one word at a time, anchored on its optimal recognition point, from 100 to 1000 wpm, with smart pauses at commas and sentence ends. Hit 🎧 inside focus mode and speech drives the flow — you hear and see each word in perfect sync.
-- **👁 Bionic reading** — optionally bold the first ~40% of every word to give the eye fixation anchors.
-- **🧬 Document DNA** — instant insights on open: reading ease, grade level, listen time, and top keywords.
-- **📍 Resume** — remembers where you left off in every document, automatically.
-- **Classic reader** — clean typography (serif or sans), adjustable text size, dark & light themes, reading progress bar. Confetti when you finish. 🎉
-- **🔒 Private & offline** — everything is parsed in your browser. No server, no upload, no tracking. Installable as a PWA and fully usable offline.
+- **Read from a URL** — paste a link and CoolText pulls the readable article text out of the page (direct fetch when the site allows it, with a public reader-service fallback for sites that block cross-origin access).
+- **Listen** — natural read-aloud (Web Speech API) with karaoke-style live word highlighting and auto-scroll. While listening, the rest of the page dims like a cinema so only the spoken paragraph stays lit. Click any word to start from there.
+- **Focus mode** — RSVP speed reading: one word at a time, anchored on its optimal recognition point, from 100 to 1000 wpm, with smart pauses at commas and sentence ends. Start read-aloud inside focus mode and speech drives the flow — you hear and see each word in perfect sync.
+- **Bionic reading** — optionally bold the first ~40% of every word to give the eye fixation anchors.
+- **Document DNA** — instant insights on open: reading ease, grade level, listen time, and top keywords.
+- **Resume** — remembers where you left off in every document, automatically.
+- **Classic reader** — clean typography (serif or sans), adjustable text size, dark & light themes, reading progress bar. Confetti when you finish.
+- **Private & offline** — everything is parsed in your browser. No server, no upload, no tracking. Installable as a PWA and fully usable offline.
 
 ## Running it
 

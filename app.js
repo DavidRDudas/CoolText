@@ -150,6 +150,79 @@
     return result.value;
   }
 
+  /* ---------------- Read from a URL ---------------- */
+
+  // Pull the readable text out of an HTML page: prefer <article>/<main>,
+  // drop chrome (nav, ads, scripts), keep block-level text in order.
+  function extractReadableText(html) {
+    const parsed = new DOMParser().parseFromString(html, 'text/html');
+    parsed.querySelectorAll('script, style, noscript, svg, nav, header, footer, aside, form, iframe, button')
+      .forEach((el) => el.remove());
+    const root = parsed.querySelector('article') || parsed.querySelector('main') || parsed.body;
+    if (!root) return '';
+    const blocks = [...root.querySelectorAll('h1, h2, h3, h4, p, li, blockquote, pre')]
+      .map((el) => el.textContent.replace(/\s+/g, ' ').trim())
+      .filter((t) => t.length > 0);
+    // Nested matches (e.g. p inside blockquote) produce duplicates — drop repeats.
+    const seen = new Set();
+    const unique = blocks.filter((t) => !seen.has(t) && seen.add(t));
+    return unique.length ? unique.join('\n\n') : root.textContent;
+  }
+
+  function extractHtmlTitle(html) {
+    const parsed = new DOMParser().parseFromString(html, 'text/html');
+    return parsed.querySelector('meta[property="og:title"]')?.content || parsed.title || '';
+  }
+
+  // Light markdown → plain text for the reader-service fallback.
+  function markdownToPlain(md) {
+    return md
+      .replace(/!\[[^\]]*\]\([^)]*\)/g, '')          // images
+      .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')       // links → their text
+      .replace(/^#{1,6}\s+/gm, '')                   // heading markers
+      .replace(/^[>*+-]\s+/gm, '')                   // quotes and bullets
+      .replace(/[*_]{1,3}([^*_]+)[*_]{1,3}/g, '$1')  // emphasis
+      .replace(/`{1,3}/g, '');
+  }
+
+  async function fetchFromUrl(raw) {
+    let input = raw.trim();
+    if (!/^https?:\/\//i.test(input)) input = 'https://' + input;
+    let url;
+    try { url = new URL(input); } catch { throw new Error('That doesn\'t look like a valid URL.'); }
+
+    // Try reading the page directly — works when the site allows cross-origin reads.
+    els.parseStatus.textContent = 'Fetching the page…';
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+      if (res.ok) {
+        const html = await res.text();
+        const text = extractReadableText(html);
+        if (text.split(/\s+/).filter(Boolean).length > 30) {
+          return { text, title: extractHtmlTitle(html) || url.hostname };
+        }
+      }
+    } catch { /* blocked by CORS or unreachable — fall through */ }
+
+    // Fallback: a public reader service fetches the page and returns clean text.
+    els.parseStatus.textContent = 'Site blocks direct access — using reader service…';
+    const res = await fetch('https://r.jina.ai/' + url.href, {
+      signal: AbortSignal.timeout(25000),
+      headers: { Accept: 'text/plain' },
+    }).catch(() => null);
+    if (!res || !res.ok) {
+      throw new Error('Couldn\'t fetch that page — try copying the text and pasting it instead.');
+    }
+    const body = await res.text();
+    let title = url.hostname;
+    let content = body;
+    const titleMatch = body.match(/^Title:\s*(.+)$/m);
+    if (titleMatch) title = titleMatch[1].trim();
+    const markerIdx = body.indexOf('Markdown Content:');
+    if (markerIdx !== -1) content = body.slice(markerIdx + 'Markdown Content:'.length);
+    return { text: markdownToPlain(content), title };
+  }
+
   /* ---------------- Document model ---------------- */
 
   function buildDocument(rawText, title) {
@@ -291,18 +364,25 @@
       .slice(0, 3)
       .map(([w]) => w);
 
+    const ICONS = {
+      ease: '<svg class="icon" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>',
+      level: '<svg class="icon" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>',
+      listen: '<svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>',
+      keywords: '<svg class="icon" viewBox="0 0 24 24"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.83z"/><circle cx="7" cy="7" r="1.5" fill="currentColor" stroke="none"/></svg>',
+    };
     const chips = [
-      ['🧠', 'Reading ease', easeLabel],
-      ['🎓', 'Level', gradeLabel],
-      ['🎧', 'Listen time', `~${listenMins} min`],
+      ['ease', 'Reading ease', easeLabel],
+      ['level', 'Level', gradeLabel],
+      ['listen', 'Listen time', `~${listenMins} min`],
     ];
-    if (keywords.length) chips.push(['🔑', 'Keywords', keywords.join(', ')]);
+    if (keywords.length) chips.push(['keywords', 'Keywords', keywords.join(', ')]);
 
     el.replaceChildren(...chips.map(([icon, label, value]) => {
       const chip = document.createElement('span');
       chip.className = 'insight-chip';
-      chip.append(icon + ' ' + label + ': ',
-        Object.assign(document.createElement('b'), { textContent: value }));
+      chip.insertAdjacentHTML('beforeend', ICONS[icon]);
+      // Values derive from document content — append as text, never as HTML.
+      chip.append(label + ': ', Object.assign(document.createElement('b'), { textContent: value }));
       return chip;
     }));
     el.hidden = false;
@@ -448,7 +528,7 @@
 
     speakNext() {
       if (!this.speaking || this.chunkIdx >= this.chunks.length) {
-        if (this.speaking) { toast('Finished! 🎉'); celebrate(); }
+        if (this.speaking) { toast('Finished!'); celebrate(); }
         this.stop();
         return;
       }
@@ -581,7 +661,7 @@
 
       if (state.currentWord >= doc.words.length - 1) {
         this.pause();
-        toast('Finished! 🎉');
+        toast('Finished!');
         celebrate();
         return;
       }
@@ -652,7 +732,9 @@
     els.parseProgress.hidden = false;
     els.parseStatus.textContent = 'Reading your document…';
     try {
-      const text = await getText();
+      const result = await getText();
+      const text = typeof result === 'string' ? result : result.text;
+      if (typeof result !== 'string' && result.title) title = result.title;
       buildDocument(text, title);
       const resumeAt = savedProgress();
       renderReader();
@@ -661,7 +743,7 @@
       window.scrollTo(0, 0);
       if (resumeAt > 20 && resumeAt < doc.words.length - 5) {
         setCurrentWord(resumeAt);
-        toast('Picked up where you left off 📍');
+        toast('Picked up where you left off');
       }
     } catch (err) {
       toast(err.message || 'Something went wrong reading that document.', true);
@@ -752,8 +834,27 @@ Reading was never supposed to be a chore. It was supposed to feel like this.`;
     // Paste
     $('#paste-go').addEventListener('click', () => {
       const text = $('#paste-input').value.trim();
-      if (!text) { toast('Paste some text first ✍️', true); return; }
+      if (!text) { toast('Paste some text first', true); return; }
       openDocument(() => Promise.resolve(text), 'Pasted text');
+    });
+
+    // From a URL
+    const urlGo = $('#url-go');
+    async function readFromUrl() {
+      const raw = $('#url-input').value.trim();
+      if (!raw) { toast('Enter a link first', true); return; }
+      urlGo.disabled = true;
+      urlGo.textContent = 'Fetching…';
+      try {
+        await openDocument(() => fetchFromUrl(raw), raw);
+      } finally {
+        urlGo.disabled = false;
+        urlGo.textContent = 'Read it';
+      }
+    }
+    urlGo.addEventListener('click', readFromUrl);
+    $('#url-input').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') readFromUrl();
     });
 
     // Sample
