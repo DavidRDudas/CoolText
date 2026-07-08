@@ -11,6 +11,9 @@
 - **Bionic reading** — optionally bold the first ~40% of every word to give the eye fixation anchors.
 - **Document DNA** — instant insights on open: reading ease, grade level, listen time, and top keywords.
 - **Table of contents** — auto-built from detected headings for quick navigation in long documents.
+- **Library** — every document you open is saved locally (IndexedDB); continue any of them from the landing page with progress bars.
+- **Quote cards** — select any passage and share it as a beautifully typeset PNG.
+- **Daily goal** — set a words-per-day target, watch the ring fill, get confetti when you hit it.
 - **Resume** — remembers where you left off in every document, automatically.
 - **Reading stats** — words read, docs opened and finished, active reading time, daily streak, words today, and a 7-day bar chart, all tracked locally (bar-chart button on the landing page).
 - **Classic reader** — clean typography (serif or sans), adjustable text size, dark & light themes, reading progress bar. Confetti when you finish.

@@ -496,6 +496,7 @@
         if (saved && typeof saved === 'object') Object.assign(this.data, saved);
       } catch { /* fresh start */ }
       if (!this.data.days || typeof this.data.days !== 'object') this.data.days = {};
+      if (!this.data.goal) this.data.goal = 2000;
     },
 
     save() {
@@ -517,7 +518,15 @@
     addWords(n) {
       this.data.wordsRead += n;
       const today = this.dayKey();
-      this.data.days[today] = (this.data.days[today] || 0) + n;
+      const before = this.data.days[today] || 0;
+      this.data.days[today] = before + n;
+      // Celebrate crossing the daily goal, once per day.
+      if (this.data.goal && before < this.data.goal && before + n >= this.data.goal &&
+          localStorage.getItem('cooltext-goal-hit') !== today) {
+        try { localStorage.setItem('cooltext-goal-hit', today); } catch { /* ok */ }
+        toast('Daily goal reached!');
+        celebrate();
+      }
       const keys = Object.keys(this.data.days);
       if (keys.length > 400) {
         keys.sort();
@@ -552,7 +561,7 @@
     },
 
     reset() {
-      this.data = { wordsRead: 0, docsOpened: 0, docsFinished: 0, readingMs: 0, days: {} };
+      this.data = { wordsRead: 0, docsOpened: 0, docsFinished: 0, readingMs: 0, days: {}, goal: 2000 };
       this.flush();
     },
   };
@@ -591,6 +600,16 @@
       return tile;
     }));
     renderStatsWeek();
+
+    // Daily goal ring
+    const today = d.days[stats.dayKey()] || 0;
+    const goal = d.goal || 2000;
+    $('#goal-today').textContent = today.toLocaleString();
+    $('#goal-target').textContent = goal.toLocaleString();
+    $('#goal-input').value = goal;
+    const C = 125.66; // 2πr for r=20
+    $('#goal-ring-fill').style.strokeDashoffset =
+      C * (1 - Math.min(1, today / goal));
   }
 
   function renderStatsWeek() {
@@ -622,6 +641,124 @@
     toast('Finished!');
     celebrate();
     stats.docFinished();
+  }
+
+  /* ============================================================
+     Library — every opened document is kept locally (IndexedDB)
+     so you can pick it back up from the landing page.
+     ============================================================ */
+
+  const library = {
+    dbPromise: null,
+
+    open() {
+      if (!('indexedDB' in window)) return Promise.reject(new Error('no idb'));
+      if (!this.dbPromise) {
+        this.dbPromise = new Promise((resolve, reject) => {
+          const req = indexedDB.open('cooltext', 1);
+          req.onupgradeneeded = () => req.result.createObjectStore('docs', { keyPath: 'key' });
+          req.onsuccess = () => resolve(req.result);
+          req.onerror = () => reject(req.error);
+        });
+      }
+      return this.dbPromise;
+    },
+
+    async all() {
+      try {
+        const db = await this.open();
+        return await new Promise((resolve) => {
+          const req = db.transaction('docs').objectStore('docs').getAll();
+          req.onsuccess = () => resolve(req.result || []);
+          req.onerror = () => resolve([]);
+        });
+      } catch { return []; }
+    },
+
+    async save(entry) {
+      try {
+        const db = await this.open();
+        const store = db.transaction('docs', 'readwrite').objectStore('docs');
+        await new Promise((resolve) => {
+          const get = store.get(entry.key);
+          get.onsuccess = () => {
+            store.put({ added: get.result?.added ?? entry.opened, ...entry });
+            resolve();
+          };
+          get.onerror = () => { store.put(entry); resolve(); };
+        });
+        // Keep the shelf tidy: drop the least recently opened beyond 40.
+        const entries = await this.all();
+        if (entries.length > 40) {
+          entries.sort((a, b) => a.opened - b.opened);
+          this.remove(entries[0].key);
+        }
+      } catch { /* private mode etc. — the shelf just stays empty */ }
+    },
+
+    async remove(key) {
+      try {
+        const db = await this.open();
+        db.transaction('docs', 'readwrite').objectStore('docs').delete(key);
+      } catch { /* best-effort */ }
+    },
+  };
+
+  function timeAgo(ts) {
+    const mins = Math.round((Date.now() - ts) / 60000);
+    if (mins < 2) return 'just now';
+    if (mins < 60) return mins + 'm ago';
+    if (mins < 48 * 60) return Math.round(mins / 60) + 'h ago';
+    return Math.round(mins / 1440) + 'd ago';
+  }
+
+  async function renderLibrary() {
+    const section = $('#library');
+    const entries = await library.all();
+    if (!entries.length) { section.hidden = true; return; }
+    entries.sort((a, b) => b.opened - a.opened);
+    let resume = {};
+    try { resume = JSON.parse(localStorage.getItem('cooltext-resume') || '{}'); } catch { /* fresh */ }
+
+    $('#library-list').replaceChildren(...entries.map((entry) => {
+      const li = document.createElement('li');
+      const pos = resume[entry.key]?.w ?? 0;
+      const pct = Math.min(100, Math.round((pos / Math.max(1, entry.words - 1)) * 100));
+      const progressLabel = pct >= 98 ? 'finished' : pct > 0 ? pct + '% read' : 'not started';
+
+      const item = document.createElement('button');
+      item.className = 'library-item';
+      item.append(
+        Object.assign(document.createElement('span'), { className: 'library-item-title', textContent: entry.title }),
+        Object.assign(document.createElement('span'), {
+          className: 'library-item-meta',
+          textContent: `${entry.words.toLocaleString()} words · ${progressLabel} · ${timeAgo(entry.opened)}`,
+        }),
+      );
+      const track = document.createElement('span');
+      track.className = 'library-progress';
+      track.appendChild(Object.assign(document.createElement('span'), { className: 'library-progress-bar' }))
+        .style.width = pct + '%';
+      item.appendChild(track);
+      item.addEventListener('click', () => {
+        openDocument(() => Promise.resolve(entry.text), entry.title);
+      });
+
+      const remove = document.createElement('button');
+      remove.className = 'library-remove';
+      remove.title = 'Remove from library';
+      remove.innerHTML = '<svg class="icon" viewBox="0 0 24 24"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>';
+      remove.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        await library.remove(entry.key);
+        renderLibrary();
+      });
+
+      li.append(item, remove);
+      li.style.position = 'relative';
+      return li;
+    }));
+    section.hidden = false;
   }
 
   function sentenceBefore(wordIdx) {
@@ -995,6 +1132,91 @@
   };
 
   /* ============================================================
+     Quote cards — select a passage, get a typeset PNG to share
+     ============================================================ */
+
+  async function makeQuoteCard(text, title) {
+    // Wait briefly for webfonts, but never block the card on a slow network.
+    await Promise.race([
+      document.fonts?.ready ?? Promise.resolve(),
+      new Promise((r) => setTimeout(r, 1500)),
+    ]).catch(() => { /* draw with fallback fonts */ });
+    const S = 1080;
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = S;
+    const ctx = canvas.getContext('2d');
+
+    const paper = '#f7f3ea', ink = '#211c14', dim = '#6e6555', accent = '#c73e1d';
+    ctx.fillStyle = paper;
+    ctx.fillRect(0, 0, S, S);
+    ctx.strokeStyle = ink;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(46, 46, S - 92, S - 92);
+    ctx.strokeStyle = 'rgba(33,26,16,0.25)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(58, 58, S - 116, S - 116);
+
+    // Accent notch at the top, like the reader's focus guides.
+    ctx.fillStyle = accent;
+    ctx.fillRect(S / 2 - 26, 46, 52, 6);
+
+    const quote = text.length > 420 ? text.slice(0, 417).trimEnd() + '…' : text;
+    const size = quote.length < 90 ? 58 : quote.length < 180 ? 48 : quote.length < 300 ? 40 : 34;
+    const serif = `600 ${size}px Newsreader, Georgia, serif`;
+    ctx.font = serif;
+    ctx.textAlign = 'center';
+
+    // Wrap to lines that fit the frame.
+    const maxWidth = S - 260;
+    const words = quote.split(/\s+/);
+    const lines = [];
+    let line = '';
+    for (const w of words) {
+      const attempt = line ? line + ' ' + w : w;
+      if (ctx.measureText(attempt).width > maxWidth && line) { lines.push(line); line = w; }
+      else line = attempt;
+    }
+    if (line) lines.push(line);
+
+    const lineHeight = size * 1.38;
+    const blockH = lines.length * lineHeight;
+    let y = (S - blockH) / 2 + lineHeight * 0.8 - 20;
+
+    // Opening quote mark.
+    ctx.fillStyle = accent;
+    ctx.font = `600 ${Math.round(size * 2.4)}px Newsreader, Georgia, serif`;
+    ctx.fillText('“', S / 2, y - lineHeight * 0.9);
+
+    ctx.fillStyle = ink;
+    ctx.font = serif;
+    for (const l of lines) {
+      ctx.fillText(l, S / 2, y);
+      y += lineHeight;
+    }
+
+    // Attribution + wordmark.
+    ctx.fillStyle = dim;
+    ctx.font = '500 30px Inter, system-ui, sans-serif';
+    ctx.fillText('— ' + (title.length > 48 ? title.slice(0, 45) + '…' : title), S / 2, y + 26);
+    ctx.fillStyle = 'rgba(33,26,16,0.45)';
+    ctx.font = '600 22px Inter, system-ui, sans-serif';
+    ctx.fillText('C O O L T E X T', S / 2, S - 88);
+
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+    const file = new File([blob], 'cooltext-quote.png', { type: 'image/png' });
+    if (navigator.canShare?.({ files: [file] })) {
+      try { await navigator.share({ files: [file] }); return; }
+      catch (err) { if (err.name === 'AbortError') return; /* else fall through */ }
+    }
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'cooltext-quote.png';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    toast('Quote card saved');
+  }
+
+  /* ============================================================
      Flow control — landing → reader
      ============================================================ */
 
@@ -1012,6 +1234,13 @@
       els.reader.hidden = false;
       window.scrollTo(0, 0);
       stats.docOpened();
+      library.save({
+        key: doc.key,
+        title: doc.title,
+        text: doc.fullText,
+        words: doc.words.length,
+        opened: Date.now(),
+      });
       if (resumeAt > 20 && resumeAt < doc.words.length - 5) {
         setCurrentWord(resumeAt);
         toast('Picked up where you left off');
@@ -1037,7 +1266,9 @@
     els.rsvp.hidden = true;
     els.settingsPanel.hidden = true;
     $('#toc-panel').hidden = true;
+    $('#quote-btn').hidden = true;
     els.landing.hidden = false;
+    renderLibrary();
   }
 
   /* ---------------- Sample text ---------------- */
@@ -1091,6 +1322,13 @@ Reading was never supposed to be a chore. It was supposed to feel like this.`;
         renderStatsModal();
       }
     });
+    $('#goal-input').addEventListener('change', (e) => {
+      stats.data.goal = Math.max(100, Math.min(50000, Number(e.target.value) || 2000));
+      stats.save();
+      renderStatsModal();
+    });
+
+    renderLibrary();
 
     // Theme
     $('#theme-toggle').addEventListener('click', toggleTheme);
@@ -1124,7 +1362,11 @@ Reading was never supposed to be a chore. It was supposed to feel like this.`;
     $('#paste-go').addEventListener('click', () => {
       const text = $('#paste-input').value.trim();
       if (!text) { toast('Paste some text first', true); return; }
-      openDocument(() => Promise.resolve(text), 'Pasted text');
+      // Use the first line as the title when it reads like one.
+      const firstLine = text.split('\n')[0].trim();
+      const title = firstLine.length >= 3 && firstLine.length <= 70 && !/[.!?,;:]$/.test(firstLine)
+        ? firstLine : 'Pasted text';
+      openDocument(() => Promise.resolve(text), title);
     });
 
     // From a URL
@@ -1174,8 +1416,39 @@ Reading was never supposed to be a chore. It was supposed to feel like this.`;
       }
     });
 
+    // Quote cards: select a passage in the reader to get the button.
+    const quoteBtn = $('#quote-btn');
+    let quoteText = '';
+    let quoteTimer;
+    document.addEventListener('selectionchange', () => {
+      clearTimeout(quoteTimer);
+      quoteTimer = setTimeout(() => {
+        const sel = window.getSelection();
+        if (els.reader.hidden || !sel || sel.isCollapsed ||
+            !els.textContainer.contains(sel.anchorNode)) {
+          quoteBtn.hidden = true;
+          return;
+        }
+        const text = sel.toString().replace(/\s+/g, ' ').trim();
+        const wordCount = text.split(' ').length;
+        if (wordCount < 3 || wordCount > 90) { quoteBtn.hidden = true; return; }
+        const rect = sel.getRangeAt(0).getBoundingClientRect();
+        quoteBtn.style.top = Math.min(innerHeight - 52, Math.max(8, rect.top - 46)) + 'px';
+        quoteBtn.style.left = Math.min(innerWidth - 140, Math.max(8, rect.left + rect.width / 2 - 60)) + 'px';
+        quoteBtn.hidden = false;
+        quoteText = text;
+      }, 180);
+    });
+    quoteBtn.addEventListener('click', () => {
+      quoteBtn.hidden = true;
+      makeQuoteCard(quoteText, doc.title);
+      window.getSelection()?.removeAllRanges();
+    });
+
     // Click a word to jump there
     els.textContainer.addEventListener('click', (e) => {
+      // A drag-select ends with a click event — don't treat it as a jump.
+      if (!window.getSelection()?.isCollapsed) return;
       const span = e.target.closest('.w');
       if (!span) return;
       const i = Number(span.dataset.i);
@@ -1248,12 +1521,12 @@ Reading was never supposed to be a chore. It was supposed to feel like this.`;
 
     // Keyboard
     document.addEventListener('keydown', (e) => {
-      if (e.target.matches('input, textarea, select')) return;
-
+      // The stats modal handles Escape even from inside its inputs.
       if (!statsModal.hidden) {
         if (e.key === 'Escape') closeStats();
         return;
       }
+      if (e.target.matches('input, textarea, select')) return;
 
       if (!els.rsvp.hidden) {
         if (e.key === ' ') {

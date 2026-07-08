@@ -369,6 +369,85 @@ kbd {
 
 .intake-footer { text-align: center; padding: 0.9rem 0 0.5rem; }
 
+/* ---------- Library ---------- */
+
+.library {
+  width: 100%;
+  max-width: 620px;
+  margin-top: 2.6rem;
+  text-align: left;
+}
+.library-title {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.6rem;
+  margin-bottom: 0.9rem;
+}
+.library-list {
+  list-style: none;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.7rem;
+}
+.library-item {
+  position: relative;
+  width: 100%;
+  text-align: left;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.9rem 1rem 0.85rem;
+  transition: all 0.18s var(--ease-spring);
+  cursor: pointer;
+}
+.library-item:hover { border-color: var(--border-strong); transform: translateY(-1px); }
+.library-item-title {
+  display: block;
+  font-family: var(--font-serif);
+  font-weight: 600;
+  font-size: 1rem;
+  color: var(--text);
+  margin-bottom: 0.25rem;
+  padding-right: 1.4rem;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.library-item-meta {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--text-faint);
+  margin-bottom: 0.6rem;
+}
+.library-progress {
+  height: 3px;
+  background: var(--bg-card);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.library-progress-bar { height: 100%; background: var(--accent); border-radius: 2px; }
+.library-remove {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: none;
+  color: var(--text-faint);
+  border-radius: 5px;
+  transition: all 0.15s;
+}
+.library-remove:hover { color: var(--accent); background: var(--bg-card); }
+.library-remove .icon { width: 13px; height: 13px; }
+
 .feature-row {
   list-style: none;
   display: grid;
@@ -753,6 +832,27 @@ body.speaking #rsvp-listen {
 .rsvp.playing .rsvp-icon-pause { display: inline-flex; }
 .rsvp-hint { color: var(--text-faint); font-size: 0.78rem; }
 
+/* ---------- Quote cards ---------- */
+
+.quote-btn {
+  position: fixed;
+  z-index: 60;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.85rem;
+  background: var(--text);
+  color: var(--bg);
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 0.82rem;
+  font-weight: 600;
+  box-shadow: var(--shadow-lg);
+  animation: fade-up 0.15s var(--ease-spring);
+}
+.quote-btn:hover { background: var(--accent); color: #fff; }
+.quote-btn .icon { width: 14px; height: 14px; }
+
 /* ---------- Reading stats ---------- */
 
 .stats-modal {
@@ -793,6 +893,47 @@ body.speaking #rsvp-listen {
   font-weight: 600;
   letter-spacing: -0.01em;
 }
+.goal-row {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.2rem 0.2rem 1rem;
+}
+.goal-ring { width: 52px; height: 52px; transform: rotate(-90deg); flex: none; }
+.goal-ring-bg { fill: none; stroke: var(--bg-card); stroke-width: 5; }
+.goal-ring-fill {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 5;
+  stroke-linecap: round;
+  stroke-dasharray: 125.66;
+  stroke-dashoffset: 125.66;
+  transition: stroke-dashoffset 0.6s var(--ease-spring);
+}
+.goal-text { display: flex; flex-direction: column; gap: 0.25rem; }
+.goal-line { font-size: 0.92rem; color: var(--text-dim); }
+.goal-line b { font-family: var(--font-serif); font-size: 1.15rem; color: var(--text); font-weight: 600; }
+.goal-edit {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-faint);
+}
+.goal-edit input {
+  width: 76px;
+  padding: 0.25rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.8rem;
+}
+
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -919,6 +1060,8 @@ body.speaking #rsvp-listen {
   .dropzone { padding: 1.9rem 1rem; }
   .url-row { flex-direction: column; }
   .feature-row { grid-template-columns: 1fr; gap: 1.2rem; margin-top: 2.2rem; }
+
+  .library-list { grid-template-columns: 1fr; }
 
   .reader-header { padding: 0.65rem 0.9rem; gap: 0.6rem; }
   .doc-title { font-size: 0.95rem; }

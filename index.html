@@ -93,6 +93,11 @@
         </div>
       </div>
 
+      <section id="library" class="library" hidden>
+        <h2 class="library-title">Your library</h2>
+        <ul id="library-list" class="library-list"></ul>
+      </section>
+
       <ul class="feature-row" aria-label="Features">
         <li><span class="feature-icon"><svg class="icon" viewBox="0 0 24 24"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg></span><strong>Listen</strong><span>Natural read-aloud with live word highlighting</span></li>
         <li><span class="feature-icon"><svg class="icon" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></span><strong>Flow</strong><span>One word at a time, up to 1000 words per minute</span></li>
@@ -131,6 +136,11 @@
     <div id="insights" class="insights" aria-label="Document insights" hidden></div>
 
     <article id="text-container" class="text-container"></article>
+
+    <button id="quote-btn" class="quote-btn" hidden>
+      <svg class="icon" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      Quote card
+    </button>
 
     <div class="control-dock">
       <button id="skip-back" class="dock-btn" title="Back one sentence (←)">
@@ -247,6 +257,18 @@
         <button id="stats-close" class="icon-btn" title="Close" aria-label="Close">
           <svg class="icon" viewBox="0 0 24 24"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
         </button>
+      </div>
+      <div class="goal-row">
+        <svg class="goal-ring" viewBox="0 0 48 48" aria-hidden="true">
+          <circle class="goal-ring-bg" cx="24" cy="24" r="20"/>
+          <circle id="goal-ring-fill" class="goal-ring-fill" cx="24" cy="24" r="20"/>
+        </svg>
+        <div class="goal-text">
+          <span class="goal-line"><b id="goal-today">0</b> / <b id="goal-target">2,000</b> words today</span>
+          <label class="goal-edit">Daily goal
+            <input id="goal-input" type="number" min="100" max="50000" step="100">
+          </label>
+        </div>
       </div>
       <div class="stats-grid" id="stats-grid"></div>
       <p class="stats-week-title">Last 7 days</p>
