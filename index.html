@@ -10,6 +10,9 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📖</text></svg>">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <meta name="theme-color" content="#0d0e14">
   <script src="vendor/pdf.min.js" defer></script>
   <script src="vendor/mammoth.browser.min.js" defer></script>
 </head>
@@ -75,7 +78,7 @@
       <ul class="feature-row" aria-label="Features">
         <li><span class="feature-emoji">🎧</span><strong>Listen</strong><span>Natural read-aloud with live word highlighting</span></li>
         <li><span class="feature-emoji">⚡</span><strong>Flow</strong><span>One word at a time, up to 1000 words per minute</span></li>
-        <li><span class="feature-emoji">🔒</span><strong>Private</strong><span>Everything happens in your browser — nothing is uploaded</span></li>
+        <li><span class="feature-emoji">🔒</span><strong>Private</strong><span>Everything happens in your browser — install it as an app, works offline</span></li>
       </ul>
     </section>
 
@@ -100,6 +103,8 @@
       </div>
     </header>
 
+    <div id="insights" class="insights" aria-label="Document insights" hidden></div>
+
     <article id="text-container" class="text-container"></article>
 
     <div class="control-dock">
@@ -122,6 +127,13 @@
         <div class="segmented">
           <button data-font="serif" class="active">Serif</button>
           <button data-font="sans">Sans</button>
+        </div>
+      </label>
+      <label class="setting">
+        <span>Bionic reading <em>guides the eye</em></span>
+        <div class="segmented">
+          <button data-bionic="off" class="active">Off</button>
+          <button data-bionic="on">On</button>
         </div>
       </label>
       <label class="setting">
@@ -173,6 +185,7 @@
           <span class="rsvp-icon-play">▶</span><span class="rsvp-icon-pause">❚❚</span>
         </button>
         <button id="rsvp-fwd" class="dock-btn" title="Forward one sentence (→)">⏭</button>
+        <button id="rsvp-listen" class="dock-btn" title="Read aloud in sync with the flow">🎧</button>
       </div>
       <p class="rsvp-hint"><kbd>space</kbd> play/pause · <kbd>←</kbd>/<kbd>→</kbd> sentence · <kbd>↑</kbd>/<kbd>↓</kbd> speed · <kbd>esc</kbd> exit</p>
     </div>

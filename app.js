@@ -15,6 +15,7 @@
 
   const doc = {
     title: '',
+    key: '',          // fingerprint for resume-position storage
     fullText: '',
     paragraphs: [],   // { start, end, isHeading }
     words: [],        // { text, start, end }
@@ -28,6 +29,7 @@
     voiceURI: '',
     fontSize: 21,
     font: 'serif',
+    bionic: false,
   };
 
   const els = {
@@ -174,6 +176,11 @@
     }
     doc.fullText = fullText;
 
+    // Cheap fingerprint so we can remember reading position per document.
+    let h = 5381;
+    for (let i = 0; i < fullText.length; i += 7) h = ((h * 33) ^ fullText.charCodeAt(i)) >>> 0;
+    doc.key = h.toString(36) + '-' + fullText.length;
+
     const wordRe = /\S+/g;
     let m;
     while ((m = wordRe.exec(fullText)) !== null) {
@@ -193,6 +200,19 @@
 
   /* ---------------- Reader rendering ---------------- */
 
+  // Bionic reading: index to split a word so its first ~40% of letters can be bolded.
+  function bionicSplit(text) {
+    const letterRe = /[0-9A-Za-zÀ-ɏ]/;
+    const letters = text.split('').filter((c) => letterRe.test(c)).length;
+    if (letters < 2) return 0;
+    const target = Math.ceil(letters * 0.4);
+    let seen = 0;
+    for (let i = 0; i < text.length; i++) {
+      if (letterRe.test(text[i]) && ++seen === target) return i + 1;
+    }
+    return 0;
+  }
+
   function renderReader() {
     els.docTitle.textContent = doc.title;
     const mins = Math.max(1, Math.round(doc.words.length / 230));
@@ -208,7 +228,14 @@
         const span = document.createElement('span');
         span.className = 'w';
         span.dataset.i = wi;
-        span.textContent = doc.words[wi].text;
+        const text = doc.words[wi].text;
+        const split = bionicSplit(text);
+        if (split > 0) {
+          span.append(Object.assign(document.createElement('b'), { textContent: text.slice(0, split) }),
+                      text.slice(split));
+        } else {
+          span.textContent = text;
+        }
         el.appendChild(span);
         el.appendChild(document.createTextNode(' '));
         wi++;
@@ -216,13 +243,75 @@
       frag.appendChild(el);
     }
     els.textContainer.replaceChildren(frag);
+    renderInsights();
     applyReadingPrefs();
     setCurrentWord(0, false);
+  }
+
+  /* ---------------- Document DNA ---------------- */
+
+  const STOPWORDS = new Set(('the a an and or but if then else when while for nor so yet of in on at to from by with' +
+    ' about into over after before under above between out off up down is are was were be been being have has had do' +
+    ' does did will would shall should may might must can could this that these those it its they them their there' +
+    ' here he she his her him you your we our us i me my not no yes than as too very just also only more most other' +
+    ' some any all each every both few many much such what which who whom whose where why how because through during' +
+    ' again once against same own said says like get got make made even still back well').split(' '));
+
+  function countSyllables(word) {
+    const groups = word.toLowerCase().replace(/e$/, '').match(/[aeiouy]+/g);
+    return Math.max(1, groups ? groups.length : 1);
+  }
+
+  function renderInsights() {
+    const el = $('#insights');
+    const clean = doc.words
+      .map((w) => w.text.toLowerCase().replace(/[^a-zà-ɏ'’-]/g, ''))
+      .filter(Boolean);
+    const sentences = Math.max(1, doc.sentenceStarts.length);
+    const syllables = clean.reduce((s, w) => s + countSyllables(w), 0);
+    const wordsPerSentence = doc.words.length / sentences;
+    const syllablesPerWord = syllables / Math.max(1, clean.length);
+
+    const ease = 206.835 - 1.015 * wordsPerSentence - 84.6 * syllablesPerWord;
+    const easeLabel = ease >= 80 ? 'Very easy' : ease >= 60 ? 'Easy' : ease >= 50 ? 'Medium'
+      : ease >= 30 ? 'Challenging' : 'Dense';
+    const grade = Math.round(0.39 * wordsPerSentence + 11.8 * syllablesPerWord - 15.59);
+    const gradeLabel = grade <= 0 ? 'Grade 1' : grade > 12 ? 'College level' : 'Grade ' + grade;
+    const listenMins = Math.max(1, Math.round(doc.words.length / 155));
+
+    const freq = new Map();
+    for (const w of clean) {
+      if (w.length < 4 || STOPWORDS.has(w)) continue;
+      const base = w.replace(/[’']s$/, '');
+      freq.set(base, (freq.get(base) || 0) + 1);
+    }
+    const keywords = [...freq.entries()]
+      .filter(([, n]) => n >= 2)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([w]) => w);
+
+    const chips = [
+      ['🧠', 'Reading ease', easeLabel],
+      ['🎓', 'Level', gradeLabel],
+      ['🎧', 'Listen time', `~${listenMins} min`],
+    ];
+    if (keywords.length) chips.push(['🔑', 'Keywords', keywords.join(', ')]);
+
+    el.replaceChildren(...chips.map(([icon, label, value]) => {
+      const chip = document.createElement('span');
+      chip.className = 'insight-chip';
+      chip.append(icon + ' ' + label + ': ',
+        Object.assign(document.createElement('b'), { textContent: value }));
+      return chip;
+    }));
+    el.hidden = false;
   }
 
   function applyReadingPrefs() {
     els.textContainer.style.setProperty('--reading-size', state.fontSize + 'px');
     els.textContainer.classList.toggle('font-sans', state.font === 'sans');
+    els.textContainer.classList.toggle('bionic', state.bionic);
     $('#fontsize-val').textContent = state.fontSize + 'px';
     $('#fontsize-range').value = state.fontSize;
     $('#rate-val').textContent = state.rate.toFixed(1) + '×';
@@ -230,21 +319,60 @@
     $('#wpm-val').textContent = state.wpm + ' wpm';
     $('#wpm-range').value = state.wpm;
     els.rsvpWpmLabel.textContent = state.wpm + ' wpm';
-    $$('.segmented button').forEach((b) =>
-      b.classList.toggle('active', b.dataset.font === state.font));
+    $$('.segmented button').forEach((b) => {
+      if (b.dataset.font) b.classList.toggle('active', b.dataset.font === state.font);
+      if (b.dataset.bionic) b.classList.toggle('active', (b.dataset.bionic === 'on') === !!state.bionic);
+    });
   }
 
   let highlightedEl = null;
+  let activePara = null;
   function setCurrentWord(i, scroll = true) {
     state.currentWord = Math.max(0, Math.min(i, doc.words.length - 1));
     if (highlightedEl) highlightedEl.classList.remove('spoken');
     highlightedEl = els.textContainer.querySelector(`[data-i="${state.currentWord}"]`);
     if (highlightedEl) {
       highlightedEl.classList.add('spoken');
-      if (scroll) highlightedEl.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      if (scroll && els.rsvp.hidden) {
+        highlightedEl.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      }
+      const para = highlightedEl.parentElement;
+      if (para !== activePara) {
+        if (activePara) activePara.classList.remove('active-para');
+        para.classList.add('active-para');
+        activePara = para;
+      }
     }
+    if (!els.rsvp.hidden) rsvp.show(state.currentWord);
     els.progressBar.style.width =
       ((state.currentWord / Math.max(1, doc.words.length - 1)) * 100) + '%';
+    saveProgress();
+  }
+
+  /* ---------------- Resume where you left off ---------------- */
+
+  let lastSave = 0;
+  function saveProgress(force = false) {
+    if (!doc.key) return;
+    const now = Date.now();
+    if (!force && now - lastSave < 2000) return;
+    lastSave = now;
+    try {
+      const all = JSON.parse(localStorage.getItem('cooltext-resume') || '{}');
+      all[doc.key] = { w: state.currentWord, t: now };
+      const keys = Object.keys(all);
+      if (keys.length > 25) {
+        keys.sort((a, b) => all[a].t - all[b].t);
+        delete all[keys[0]];
+      }
+      localStorage.setItem('cooltext-resume', JSON.stringify(all));
+    } catch { /* storage full or unavailable — resume is best-effort */ }
+  }
+
+  function savedProgress() {
+    try {
+      return JSON.parse(localStorage.getItem('cooltext-resume') || '{}')[doc.key]?.w ?? 0;
+    } catch { return 0; }
   }
 
   function sentenceBefore(wordIdx) {
@@ -313,13 +441,14 @@
       this.chunkIdx = 0;
       this.speaking = true;
       els.reader.classList.add('speaking');
+      document.body.classList.add('speaking');
       setCurrentWord(fromWord);
       this.speakNext();
     },
 
     speakNext() {
       if (!this.speaking || this.chunkIdx >= this.chunks.length) {
-        if (this.speaking) toast('Finished! 🎉');
+        if (this.speaking) { toast('Finished! 🎉'); celebrate(); }
         this.stop();
         return;
       }
@@ -347,6 +476,7 @@
     stop() {
       this.speaking = false;
       els.reader.classList.remove('speaking');
+      document.body.classList.remove('speaking');
       speechSynthesis.cancel();
     },
 
@@ -355,6 +485,45 @@
       else this.start(state.currentWord);
     },
   };
+
+  /* ---------------- Confetti (finished a document!) ---------------- */
+
+  function celebrate() {
+    const canvas = document.createElement('canvas');
+    canvas.className = 'confetti';
+    canvas.width = innerWidth;
+    canvas.height = innerHeight;
+    document.body.appendChild(canvas);
+    const ctx = canvas.getContext('2d');
+    const colors = ['#7c6cff', '#00d4d8', '#ff7a59', '#e4589b', '#ffd166'];
+    const parts = Array.from({ length: 140 }, () => ({
+      x: canvas.width / 2,
+      y: canvas.height * 0.62,
+      vx: (Math.random() - 0.5) * 15,
+      vy: -Math.random() * 14 - 5,
+      size: Math.random() * 7 + 4,
+      rot: Math.random() * Math.PI,
+      vrot: (Math.random() - 0.5) * 0.3,
+      color: colors[(Math.random() * colors.length) | 0],
+    }));
+    let frame = 0;
+    (function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      for (const p of parts) {
+        p.x += p.vx; p.y += p.vy;
+        p.vy += 0.35; p.vx *= 0.99; p.rot += p.vrot;
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.rot);
+        ctx.globalAlpha = Math.max(0, 1 - frame / 110);
+        ctx.fillStyle = p.color;
+        ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.62);
+        ctx.restore();
+      }
+      if (++frame < 120) requestAnimationFrame(draw);
+      else canvas.remove();
+    })();
+  }
 
   // Binary search: which word contains this character offset?
   function wordIndexAt(charOffset) {
@@ -413,6 +582,7 @@
       if (state.currentWord >= doc.words.length - 1) {
         this.pause();
         toast('Finished! 🎉');
+        celebrate();
         return;
       }
 
@@ -423,6 +593,7 @@
       if (/[,;:—]["'”’)]*$/.test(w.text)) delay *= 1.6;
       if (/[.!?…]["'”’)]*$/.test(w.text)) delay *= 2.1;
 
+      saveProgress();
       this.timer = setTimeout(() => {
         state.currentWord++;
         this.tick();
@@ -483,10 +654,15 @@
     try {
       const text = await getText();
       buildDocument(text, title);
+      const resumeAt = savedProgress();
       renderReader();
       els.landing.hidden = true;
       els.reader.hidden = false;
       window.scrollTo(0, 0);
+      if (resumeAt > 20 && resumeAt < doc.words.length - 5) {
+        setCurrentWord(resumeAt);
+        toast('Picked up where you left off 📍');
+      }
     } catch (err) {
       toast(err.message || 'Something went wrong reading that document.', true);
     } finally {
@@ -501,6 +677,7 @@
   }
 
   function backToLanding() {
+    saveProgress(true);
     tts.stop();
     rsvp.pause();
     els.reader.hidden = true;
@@ -618,7 +795,6 @@ Reading was never supposed to be a chore. It was supposed to feel like this.`;
         : sentenceAfter(state.currentWord);
       if (tts.speaking) tts.start(target);
       else setCurrentWord(target);
-      if (!els.rsvp.hidden) rsvp.show(state.currentWord = target);
     }
 
     // Settings
@@ -632,7 +808,8 @@ Reading was never supposed to be a chore. It was supposed to feel like this.`;
     });
     $('#wpm-range').addEventListener('input', (e) => rsvp.setWpm(Number(e.target.value)));
     $$('.segmented button').forEach((b) => b.addEventListener('click', () => {
-      state.font = b.dataset.font;
+      if (b.dataset.font) state.font = b.dataset.font;
+      if (b.dataset.bionic) state.bionic = b.dataset.bionic === 'on';
       savePrefs(); applyReadingPrefs();
     }));
     els.voiceSelect.addEventListener('change', () => {
@@ -648,6 +825,12 @@ Reading was never supposed to be a chore. It was supposed to feel like this.`;
     $('#rsvp-faster').addEventListener('click', () => rsvp.setWpm(state.wpm + 20));
     $('#rsvp-back').addEventListener('click', () => skipSentence(-1));
     $('#rsvp-fwd').addEventListener('click', () => skipSentence(1));
+    // Listen in sync with the flow: speech boundaries drive the flashing word.
+    $('#rsvp-listen').addEventListener('click', () => {
+      if (tts.speaking) { tts.stop(); return; }
+      rsvp.pause();
+      tts.start(state.currentWord);
+    });
     $('.rsvp-progress').addEventListener('click', (e) => {
       const rect = e.currentTarget.getBoundingClientRect();
       const frac = (e.clientX - rect.left) / rect.width;
@@ -660,7 +843,11 @@ Reading was never supposed to be a chore. It was supposed to feel like this.`;
       if (e.target.matches('input, textarea, select')) return;
 
       if (!els.rsvp.hidden) {
-        if (e.key === ' ') { e.preventDefault(); rsvp.toggle(); }
+        if (e.key === ' ') {
+          e.preventDefault();
+          if (tts.speaking) tts.stop();
+          else rsvp.toggle();
+        }
         else if (e.key === 'Escape') rsvp.close();
         else if (e.key === 'ArrowLeft') skipSentence(-1);
         else if (e.key === 'ArrowRight') skipSentence(1);
@@ -684,8 +871,16 @@ Reading was never supposed to be a chore. It was supposed to feel like this.`;
       speechSynthesis.addEventListener('voiceschanged', () => tts.populateVoices());
     }
 
-    // Stop speech when leaving the page.
-    window.addEventListener('beforeunload', () => speechSynthesis?.cancel());
+    // Stop speech when leaving the page; remember the reading position.
+    window.addEventListener('beforeunload', () => {
+      saveProgress(true);
+      speechSynthesis?.cancel();
+    });
+
+    // Installable + offline.
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js').catch(() => { /* http or unsupported */ });
+    }
   }
 
   document.addEventListener('DOMContentLoaded', init);

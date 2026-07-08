@@ -369,10 +369,33 @@ kbd {
 .doc-stats { color: var(--text-faint); font-size: 0.78rem; }
 .reader-header-actions { display: flex; gap: 0.5rem; }
 
+/* ---------- Document insights ("Document DNA") ---------- */
+
+.insights {
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 2rem 1.6rem 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.insight-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.38rem 0.8rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.78rem;
+  color: var(--text-dim);
+}
+.insight-chip b { color: var(--text); font-weight: 600; }
+
 .text-container {
   max-width: 46rem;
   margin: 0 auto;
-  padding: 3rem 1.6rem 11rem;
+  padding: 1.5rem 1.6rem 11rem;
   font-family: var(--font-serif);
   font-size: var(--reading-size, 21px);
   line-height: 1.75;
@@ -392,6 +415,13 @@ kbd {
   cursor: pointer;
   transition: background 0.12s;
 }
+/* Bionic reading: the bold prefix is always in the markup, styled only when enabled */
+.text-container .w b { font-weight: inherit; }
+.text-container.bionic .w b { font-weight: 700; }
+
+/* Cinema dim: while listening, only the spoken paragraph stays lit */
+.text-container > p, .text-container > h2 { transition: opacity 0.45s ease; }
+.reader.speaking .text-container > :not(.active-para) { opacity: 0.3; }
 .text-container .w:hover { background: var(--bg-card); box-shadow: 0 0 0 3px var(--bg-card); }
 .text-container .w.spoken {
   background: var(--highlight-bg);
@@ -582,10 +612,24 @@ kbd {
 }
 .rsvp-progress-bar { height: 100%; width: 0%; background: var(--gradient); border-radius: 2px; }
 .rsvp-controls { display: flex; align-items: center; gap: 0.6rem; }
+body.speaking #rsvp-listen {
+  background: var(--accent-warm);
+  color: #fff;
+  box-shadow: 0 6px 18px -4px rgb(255 122 89 / 0.55);
+}
 .rsvp-icon-pause { display: none; }
 .rsvp.playing .rsvp-icon-play { display: none; }
 .rsvp.playing .rsvp-icon-pause { display: inline; }
 .rsvp-hint { color: var(--text-faint); font-size: 0.78rem; }
+
+/* ---------- Confetti ---------- */
+
+.confetti {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  pointer-events: none;
+}
 
 /* ---------- Toast ---------- */
 
