@@ -293,10 +293,14 @@
       `${doc.words.length.toLocaleString()} words · ~${mins} min read`;
 
     const frag = document.createDocumentFragment();
+    const tocItems = [];
     let wi = 0;
     for (const para of doc.paragraphs) {
       const el = document.createElement(para.isHeading ? 'h2' : 'p');
-      if (para.isHeading) el.className = 'doc-heading';
+      if (para.isHeading) {
+        el.className = 'doc-heading';
+        tocItems.push({ text: doc.fullText.slice(para.start, para.end), wordIdx: wi });
+      }
       while (wi < doc.words.length && doc.words[wi].start < para.end) {
         const span = document.createElement('span');
         span.className = 'w';
@@ -316,9 +320,28 @@
       frag.appendChild(el);
     }
     els.textContainer.replaceChildren(frag);
+    renderToc(tocItems);
     renderInsights();
     applyReadingPrefs();
     setCurrentWord(0, false);
+  }
+
+  /* ---------------- Table of contents ---------------- */
+
+  function renderToc(items) {
+    $('#toc-btn').hidden = items.length < 2;
+    $('#toc-list').replaceChildren(...items.map(({ text, wordIdx }) => {
+      const li = document.createElement('li');
+      const btn = document.createElement('button');
+      btn.textContent = text;
+      btn.addEventListener('click', () => {
+        $('#toc-panel').hidden = true;
+        if (tts.speaking) tts.start(wordIdx);
+        else setCurrentWord(wordIdx);
+      });
+      li.appendChild(btn);
+      return li;
+    }));
   }
 
   /* ---------------- Document DNA ---------------- */
@@ -565,6 +588,32 @@
       );
       return tile;
     }));
+    renderStatsWeek();
+  }
+
+  function renderStatsWeek() {
+    const DAY = 24 * 3600 * 1000;
+    const days = [];
+    let max = 0;
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date(Date.now() - i * DAY);
+      const words = stats.data.days[stats.dayKey(date)] || 0;
+      max = Math.max(max, words);
+      days.push({ date, words });
+    }
+    $('#stats-week').replaceChildren(...days.map(({ date, words }, i) => {
+      const col = document.createElement('div');
+      col.className = 'stats-day';
+      const bar = document.createElement('div');
+      bar.className = 'stats-bar' + (i === 6 ? ' today' : '');
+      bar.style.height = (max ? Math.max(4, (words / max) * 100) : 4) + '%';
+      bar.title = words.toLocaleString() + (words === 1 ? ' word' : ' words');
+      const label = document.createElement('span');
+      label.className = 'stats-day-label';
+      label.textContent = ['S', 'M', 'T', 'W', 'T', 'F', 'S'][date.getDay()];
+      col.append(bar, label);
+      return col;
+    }));
   }
 
   function finishDocument() {
@@ -701,7 +750,7 @@
     canvas.height = innerHeight;
     document.body.appendChild(canvas);
     const ctx = canvas.getContext('2d');
-    const colors = ['#7c6cff', '#00d4d8', '#ff7a59', '#e4589b', '#ffd166'];
+    const colors = ['#c73e1d', '#e6633a', '#d9a441', '#f2c94c', '#2a6f77'];
     const parts = Array.from({ length: 140 }, () => ({
       x: canvas.width / 2,
       y: canvas.height * 0.62,
@@ -894,6 +943,7 @@
     els.reader.hidden = true;
     els.rsvp.hidden = true;
     els.settingsPanel.hidden = true;
+    $('#toc-panel').hidden = true;
     els.landing.hidden = false;
   }
 
@@ -1008,15 +1058,26 @@ Reading was never supposed to be a chore. It was supposed to feel like this.`;
       openDocument(() => Promise.resolve(SAMPLE), 'The Reading Machine'));
 
     // Reader chrome
+    const tocPanel = $('#toc-panel');
     $('#back-btn').addEventListener('click', backToLanding);
     $('#settings-btn').addEventListener('click', () => {
+      tocPanel.hidden = true;
       els.settingsPanel.hidden = !els.settingsPanel.hidden;
+    });
+    $('#toc-btn').addEventListener('click', () => {
+      els.settingsPanel.hidden = true;
+      tocPanel.hidden = !tocPanel.hidden;
     });
     document.addEventListener('click', (e) => {
       if (!els.settingsPanel.hidden &&
           !els.settingsPanel.contains(e.target) &&
           !$('#settings-btn').contains(e.target)) {
         els.settingsPanel.hidden = true;
+      }
+      if (!tocPanel.hidden &&
+          !tocPanel.contains(e.target) &&
+          !$('#toc-btn').contains(e.target)) {
+        tocPanel.hidden = true;
       }
     });
 
@@ -1118,7 +1179,7 @@ Reading was never supposed to be a chore. It was supposed to feel like this.`;
         else if (e.key === 'f' || e.key === 'F') rsvp.open();
         else if (e.key === 'ArrowLeft') skipSentence(-1);
         else if (e.key === 'ArrowRight') skipSentence(1);
-        else if (e.key === 'Escape') els.settingsPanel.hidden = true;
+        else if (e.key === 'Escape') { els.settingsPanel.hidden = true; tocPanel.hidden = true; }
       }
     });
 

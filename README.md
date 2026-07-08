@@ -10,8 +10,9 @@
 - **Focus mode** — RSVP speed reading: one word at a time, anchored on its optimal recognition point, from 100 to 1000 wpm, with smart pauses at commas and sentence ends. Start read-aloud inside focus mode and speech drives the flow — you hear and see each word in perfect sync.
 - **Bionic reading** — optionally bold the first ~40% of every word to give the eye fixation anchors.
 - **Document DNA** — instant insights on open: reading ease, grade level, listen time, and top keywords.
+- **Table of contents** — auto-built from detected headings for quick navigation in long documents.
 - **Resume** — remembers where you left off in every document, automatically.
-- **Reading stats** — words read, docs opened and finished, active reading time, daily streak, and words today, all tracked locally (bar-chart button on the landing page).
+- **Reading stats** — words read, docs opened and finished, active reading time, daily streak, words today, and a 7-day bar chart, all tracked locally (bar-chart button on the landing page).
 - **Classic reader** — clean typography (serif or sans), adjustable text size, dark & light themes, reading progress bar. Confetti when you finish.
 - **Private & offline** — everything is parsed in your browser. No server, no upload, no tracking. Installable as a PWA and fully usable offline.
 
