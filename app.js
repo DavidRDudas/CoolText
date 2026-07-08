@@ -27,6 +27,7 @@
     wpm: 320,
     rate: 1,
     voiceURI: '',
+    voiceExplicit: false,  // true once the user picks a voice themselves
     fontSize: 21,
     font: 'serif',
     bionic: false,
@@ -67,8 +68,9 @@
   }
 
   function savePrefs() {
-    const { wpm, rate, voiceURI, fontSize, font } = state;
-    localStorage.setItem('cooltext-prefs', JSON.stringify({ wpm, rate, voiceURI, fontSize, font }));
+    const { wpm, rate, voiceURI, voiceExplicit, fontSize, font, bionic } = state;
+    localStorage.setItem('cooltext-prefs',
+      JSON.stringify({ wpm, rate, voiceURI, voiceExplicit, fontSize, font, bionic }));
   }
 
   function toggleTheme() {
@@ -658,10 +660,12 @@
       const list = voices.filter((v) =>
         v.lang.startsWith(navigator.language.slice(0, 2)) || v.lang.startsWith('en'));
       if (!list.length) return;
-      // Prefer a local voice: network voices (e.g. Chrome's "Google …" ones)
-      // never fire word-boundary events, which breaks live highlighting.
-      if (!state.voiceURI) {
-        const preferred = list.find((v) => v.localService && v.default) ||
+      // Default voice, unless the user has explicitly picked one. Highlight
+      // sync works either way: boundary events when the voice fires them,
+      // the self-calibrating estimator when it doesn't.
+      if (!state.voiceURI || !state.voiceExplicit) {
+        const preferred = list.find((v) => v.name === 'Google UK English Female') ||
+          list.find((v) => v.localService && v.default) ||
           list.find((v) => v.localService) || list.find((v) => v.default) || list[0];
         state.voiceURI = preferred.voiceURI;
       }
@@ -721,13 +725,14 @@
         // Some voices (notably Chrome's network voices) never fire word
         // boundaries. If none arrive shortly, fall back to estimated timing.
         clearTimeout(this.graceTimer);
-        if (this.boundarySupported === false) { this.startEstimator(chunk); return; }
+        this.uttStart = Date.now();
+        if (this.boundarySupported === false) { this.startEstimator(chunk, 0); return; }
         this.graceTimer = setTimeout(() => {
           if (this.speaking && !this.boundarySeen) {
             this.boundarySupported = false;
-            this.startEstimator(chunk);
+            this.startEstimator(chunk, Date.now() - this.uttStart);
           }
-        }, 450);
+        }, 350);
       };
       utt.onboundary = (e) => {
         if (e.name && e.name !== 'word') return;
@@ -747,6 +752,17 @@
       utt.onend = () => {
         clearTimeout(this.graceTimer);
         this.stopEstimator();
+        // Calibrate the estimator against how long this voice actually took
+        // to speak the chunk, keyed by voice + rate.
+        if (!this.boundarySeen && this.uttStart) {
+          const duration = Date.now() - this.uttStart;
+          const key = state.voiceURI + '@' + state.rate;
+          if (duration > 300 && chunk.text.length > 20) {
+            if (this.calKey !== key) { this.calKey = key; this.calChars = 0; this.calMs = 0; }
+            this.calChars += chunk.text.length;
+            this.calMs += duration;
+          }
+        }
         this.chunkIdx++;
         this.speakNext();
       };
@@ -759,28 +775,43 @@
     },
 
     // Fallback highlighting: advance word by word on a timer, pacing each
-    // word by its length. Resyncs to the true position at every sentence,
-    // since each chunk's estimator starts from that chunk's first word.
-    startEstimator(chunk) {
+    // word by its length (clause punctuation earns extra dwell). The pace
+    // self-calibrates from how long the voice actually takes per sentence,
+    // and it resyncs to the true position at every sentence, since each
+    // chunk's estimator starts from that chunk's first word. `elapsedMs`
+    // skips ahead when the estimator starts after speech already began.
+    startEstimator(chunk, elapsedMs = 0) {
       this.stopEstimator();
       const from = wordIndexAt(chunk.absStart);
       const to = wordIndexAt(chunk.absStart + chunk.text.length - 1);
       if (from < 0 || to < from) return;
       const words = doc.words.slice(from, to + 1);
-      const totalChars = words.reduce((sum, w) => sum + w.text.length + 1, 0);
-      // ~170 wpm is a typical synthesis pace at rate 1.
-      const totalMs = words.length * (60000 / (170 * state.rate));
-      let i = from;
+      const weightOf = (w) =>
+        (w.text.length + 1) * (/[,;:—]["'”’)]*$/.test(w.text) ? 1.45 : 1);
+      const totalWeight = words.reduce((sum, w) => sum + weightOf(w), 0);
+      // Calibrated chars-per-ms for this voice+rate, else ~17 chars/sec
+      // (≈170 wpm) scaled by rate as the starting guess.
+      const charsPerMs = (this.calKey === state.voiceURI + '@' + state.rate && this.calMs > 400)
+        ? this.calChars / this.calMs
+        : 0.017 * state.rate;
+      const totalMs = chunk.text.length / charsPerMs;
+      const dwells = words.map((w) => totalMs * (weightOf(w) / totalWeight));
+
+      // Skip words already spoken while we were waiting to detect support.
+      let i = 0;
+      let remaining = elapsedMs;
+      while (i < dwells.length - 1 && remaining > dwells[i]) { remaining -= dwells[i]; i++; }
+
       const step = () => {
         if (!this.speaking) return;
-        setCurrentWord(i);
-        const delta = i - this.lastBoundaryWord;
+        const wi = from + i;
+        setCurrentWord(wi);
+        const delta = wi - this.lastBoundaryWord;
         if (delta > 0 && delta <= 5) stats.addWords(delta);
-        this.lastBoundaryWord = i;
-        const dwell = totalMs * ((doc.words[i].text.length + 1) / totalChars);
+        this.lastBoundaryWord = wi;
         i++;
-        if (i > to) return;
-        this.estimTimer = setTimeout(step, dwell);
+        if (i >= dwells.length) return;
+        this.estimTimer = setTimeout(step, dwells[i - 1]);
       };
       step();
     },
@@ -1184,6 +1215,8 @@ Reading was never supposed to be a chore. It was supposed to feel like this.`;
     }));
     els.voiceSelect.addEventListener('change', () => {
       state.voiceURI = els.voiceSelect.value;
+      state.voiceExplicit = true;
+      tts.boundarySupported = null; // re-detect for the new voice
       savePrefs();
       if (tts.speaking) tts.start(state.currentWord);
     });
