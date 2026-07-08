@@ -11,6 +11,7 @@
 - **Bionic reading** — optionally bold the first ~40% of every word to give the eye fixation anchors.
 - **Document DNA** — instant insights on open: reading ease, grade level, listen time, and top keywords.
 - **Resume** — remembers where you left off in every document, automatically.
+- **Reading stats** — words read, docs opened and finished, active reading time, daily streak, and words today, all tracked locally (bar-chart button on the landing page).
 - **Classic reader** — clean typography (serif or sans), adjustable text size, dark & light themes, reading progress bar. Confetti when you finish.
 - **Private & offline** — everything is parsed in your browser. No server, no upload, no tracking. Installable as a PWA and fully usable offline.
 

@@ -455,6 +455,124 @@
     } catch { return 0; }
   }
 
+  /* ============================================================
+     Reading stats — words read, documents finished, active time,
+     daily streak. Local-only, like everything else here.
+     ============================================================ */
+
+  const stats = {
+    data: { wordsRead: 0, docsOpened: 0, docsFinished: 0, readingMs: 0, days: {} },
+    saveTimer: 0,
+    activeSince: 0,
+
+    load() {
+      try {
+        const saved = JSON.parse(localStorage.getItem('cooltext-stats') || 'null');
+        if (saved && typeof saved === 'object') Object.assign(this.data, saved);
+      } catch { /* fresh start */ }
+      if (!this.data.days || typeof this.data.days !== 'object') this.data.days = {};
+    },
+
+    save() {
+      clearTimeout(this.saveTimer);
+      this.saveTimer = setTimeout(() => this.flush(), 500);
+    },
+
+    flush() {
+      clearTimeout(this.saveTimer);
+      try { localStorage.setItem('cooltext-stats', JSON.stringify(this.data)); } catch { /* best-effort */ }
+    },
+
+    dayKey(date = new Date()) {
+      return date.getFullYear() + '-' +
+        String(date.getMonth() + 1).padStart(2, '0') + '-' +
+        String(date.getDate()).padStart(2, '0');
+    },
+
+    addWords(n) {
+      this.data.wordsRead += n;
+      const today = this.dayKey();
+      this.data.days[today] = (this.data.days[today] || 0) + n;
+      const keys = Object.keys(this.data.days);
+      if (keys.length > 400) {
+        keys.sort();
+        for (const k of keys.slice(0, keys.length - 400)) delete this.data.days[k];
+      }
+      this.save();
+    },
+
+    docOpened() { this.data.docsOpened++; this.save(); },
+    docFinished() { this.data.docsFinished++; this.save(); },
+
+    // Active reading time: accumulated while listening or in focus flow.
+    beginActive() { if (!this.activeSince) this.activeSince = Date.now(); },
+    endActive() {
+      if (!this.activeSince) return;
+      this.data.readingMs += Date.now() - this.activeSince;
+      this.activeSince = 0;
+      this.flush();
+    },
+
+    // Consecutive active days ending today (a quiet today doesn't break it yet).
+    streak() {
+      const DAY = 24 * 3600 * 1000;
+      let cursor = new Date();
+      let count = 0;
+      if (!this.data.days[this.dayKey(cursor)]) cursor = new Date(cursor.getTime() - DAY);
+      while (this.data.days[this.dayKey(cursor)] > 0) {
+        count++;
+        cursor = new Date(cursor.getTime() - DAY);
+      }
+      return count;
+    },
+
+    reset() {
+      this.data = { wordsRead: 0, docsOpened: 0, docsFinished: 0, readingMs: 0, days: {} };
+      this.flush();
+    },
+  };
+
+  function formatCount(n) {
+    if (n < 10000) return n.toLocaleString();
+    if (n < 1e6) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
+    return (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'M';
+  }
+
+  function formatDuration(ms) {
+    const mins = Math.round(ms / 60000);
+    if (mins < 1) return ms > 0 ? '<1 min' : '0 min';
+    if (mins < 60) return mins + ' min';
+    return (mins / 60).toFixed(1).replace(/\.0$/, '') + ' h';
+  }
+
+  function renderStatsModal() {
+    const d = stats.data;
+    const streak = stats.streak();
+    const tiles = [
+      [formatCount(d.wordsRead), 'words read'],
+      [String(d.docsFinished), d.docsFinished === 1 ? 'doc finished' : 'docs finished'],
+      [String(d.docsOpened), d.docsOpened === 1 ? 'doc opened' : 'docs opened'],
+      [formatDuration(d.readingMs), 'time reading'],
+      [String(streak), streak === 1 ? 'day streak' : 'day streak'],
+      [formatCount(d.days[stats.dayKey()] || 0), 'words today'],
+    ];
+    $('#stats-grid').replaceChildren(...tiles.map(([value, label]) => {
+      const tile = document.createElement('div');
+      tile.className = 'stat-tile';
+      tile.append(
+        Object.assign(document.createElement('span'), { className: 'stat-value', textContent: value }),
+        Object.assign(document.createElement('span'), { className: 'stat-label', textContent: label }),
+      );
+      return tile;
+    }));
+  }
+
+  function finishDocument() {
+    toast('Finished!');
+    celebrate();
+    stats.docFinished();
+  }
+
   function sentenceBefore(wordIdx) {
     const starts = doc.sentenceStarts;
     let cur = 0;
@@ -520,15 +638,17 @@
       }
       this.chunkIdx = 0;
       this.speaking = true;
+      this.lastBoundaryWord = fromWord;
       els.reader.classList.add('speaking');
       document.body.classList.add('speaking');
+      stats.beginActive();
       setCurrentWord(fromWord);
       this.speakNext();
     },
 
     speakNext() {
       if (!this.speaking || this.chunkIdx >= this.chunks.length) {
-        if (this.speaking) { toast('Finished!'); celebrate(); }
+        if (this.speaking) finishDocument();
         this.stop();
         return;
       }
@@ -542,7 +662,12 @@
         if (e.name && e.name !== 'word') return;
         const abs = chunk.absStart + e.charIndex;
         const wi = wordIndexAt(abs);
-        if (wi >= 0) setCurrentWord(wi);
+        if (wi < 0) return;
+        setCurrentWord(wi);
+        // Small forward steps are words actually heard; jumps are seeks.
+        const delta = wi - this.lastBoundaryWord;
+        if (delta > 0 && delta <= 5) stats.addWords(delta);
+        this.lastBoundaryWord = wi;
       };
       utt.onend = () => { this.chunkIdx++; this.speakNext(); };
       utt.onerror = (e) => {
@@ -557,6 +682,7 @@
       this.speaking = false;
       els.reader.classList.remove('speaking');
       document.body.classList.remove('speaking');
+      stats.endActive();
       speechSynthesis.cancel();
     },
 
@@ -643,6 +769,7 @@
       if (this.playing) return;
       this.playing = true;
       els.rsvp.classList.add('playing');
+      stats.beginActive();
       this.tick();
     },
 
@@ -650,6 +777,7 @@
       this.playing = false;
       els.rsvp.classList.remove('playing');
       clearTimeout(this.timer);
+      if (!tts.speaking) stats.endActive();
     },
 
     toggle() { this.playing ? this.pause() : this.play(); },
@@ -661,8 +789,7 @@
 
       if (state.currentWord >= doc.words.length - 1) {
         this.pause();
-        toast('Finished!');
-        celebrate();
+        finishDocument();
         return;
       }
 
@@ -676,6 +803,7 @@
       saveProgress();
       this.timer = setTimeout(() => {
         state.currentWord++;
+        stats.addWords(1);
         this.tick();
       }, delay);
     },
@@ -741,6 +869,7 @@
       els.landing.hidden = true;
       els.reader.hidden = false;
       window.scrollTo(0, 0);
+      stats.docOpened();
       if (resumeAt > 20 && resumeAt < doc.words.length - 5) {
         setCurrentWord(resumeAt);
         toast('Picked up where you left off');
@@ -800,8 +929,25 @@ Reading was never supposed to be a chore. It was supposed to feel like this.`;
 
   function init() {
     loadPrefs();
+    stats.load();
     animateHeroTitle();
     applyReadingPrefs();
+
+    // Reading stats modal
+    const statsModal = $('#stats-modal');
+    const closeStats = () => { statsModal.hidden = true; };
+    $('#stats-btn').addEventListener('click', () => {
+      renderStatsModal();
+      statsModal.hidden = false;
+    });
+    $('#stats-close').addEventListener('click', closeStats);
+    $('#stats-backdrop').addEventListener('click', closeStats);
+    $('#stats-reset').addEventListener('click', () => {
+      if (confirm('Reset all reading stats? This can\'t be undone.')) {
+        stats.reset();
+        renderStatsModal();
+      }
+    });
 
     // Theme
     $('#theme-toggle').addEventListener('click', toggleTheme);
@@ -948,6 +1094,11 @@ Reading was never supposed to be a chore. It was supposed to feel like this.`;
     document.addEventListener('keydown', (e) => {
       if (e.target.matches('input, textarea, select')) return;
 
+      if (!statsModal.hidden) {
+        if (e.key === 'Escape') closeStats();
+        return;
+      }
+
       if (!els.rsvp.hidden) {
         if (e.key === ' ') {
           e.preventDefault();
@@ -977,9 +1128,11 @@ Reading was never supposed to be a chore. It was supposed to feel like this.`;
       speechSynthesis.addEventListener('voiceschanged', () => tts.populateVoices());
     }
 
-    // Stop speech when leaving the page; remember the reading position.
+    // Stop speech when leaving the page; remember position and flush stats.
     window.addEventListener('beforeunload', () => {
       saveProgress(true);
+      stats.endActive();
+      stats.flush();
       speechSynthesis?.cancel();
     });
 

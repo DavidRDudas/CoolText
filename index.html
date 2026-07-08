@@ -41,9 +41,14 @@
         </svg>
         <span class="brand-name">CoolText</span>
       </div>
-      <button id="theme-toggle" class="icon-btn" title="Toggle theme" aria-label="Toggle theme">
-        <span class="theme-icon-dark"><svg class="icon" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></span><span class="theme-icon-light"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg></span>
-      </button>
+      <div class="landing-actions">
+        <button id="stats-btn" class="icon-btn" title="Your reading stats" aria-label="Reading stats">
+          <svg class="icon" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        </button>
+        <button id="theme-toggle" class="icon-btn" title="Toggle theme" aria-label="Toggle theme">
+          <span class="theme-icon-dark"><svg class="icon" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></span><span class="theme-icon-light"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg></span>
+        </button>
+      </div>
     </header>
 
     <section class="hero">
@@ -229,6 +234,24 @@
         </button>
       </div>
       <p class="rsvp-hint"><kbd>space</kbd> play/pause · <kbd>←</kbd>/<kbd>→</kbd> sentence · <kbd>↑</kbd>/<kbd>↓</kbd> speed · <kbd>esc</kbd> exit</p>
+    </div>
+  </div>
+
+  <!-- ======== Reading stats ======== -->
+  <div id="stats-modal" class="stats-modal" hidden>
+    <div class="stats-backdrop" id="stats-backdrop"></div>
+    <div class="stats-card" role="dialog" aria-modal="true" aria-label="Your reading stats">
+      <div class="stats-head">
+        <h3>Your reading</h3>
+        <button id="stats-close" class="icon-btn" title="Close" aria-label="Close">
+          <svg class="icon" viewBox="0 0 24 24"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="stats-grid" id="stats-grid"></div>
+      <div class="stats-foot">
+        <p class="stats-note">Stats live only in this browser — nothing is sent anywhere.</p>
+        <button id="stats-reset" class="btn-ghost">Reset</button>
+      </div>
     </div>
   </div>
 
