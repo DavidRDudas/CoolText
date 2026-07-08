@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CoolText — Make PDFs cool again</title>
+  <meta name="description" content="Upload a PDF, Word doc, or paste text. CoolText reads it aloud and presents it beautifully — word by word, at your pace.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📖</text></svg>">
+  <script src="vendor/pdf.min.js" defer></script>
+  <script src="vendor/mammoth.browser.min.js" defer></script>
+</head>
+<body>
+
+  <!-- ======== Landing ======== -->
+  <main id="landing" class="landing">
+    <div class="bg-blobs" aria-hidden="true">
+      <div class="blob blob-1"></div>
+      <div class="blob blob-2"></div>
+      <div class="blob blob-3"></div>
+    </div>
+
+    <header class="landing-header">
+      <div class="brand">
+        <span class="brand-mark">📖</span>
+        <span class="brand-name">CoolText</span>
+      </div>
+      <button id="theme-toggle" class="icon-btn" title="Toggle theme" aria-label="Toggle theme">
+        <span class="theme-icon-dark">☾</span><span class="theme-icon-light">☀</span>
+      </button>
+    </header>
+
+    <section class="hero">
+      <h1 class="hero-title" id="hero-title">Make PDFs cool again.</h1>
+      <p class="hero-sub">Drop in a document and turn reading into an experience —
+        listen to it read aloud, or flow through it one beautiful word at a time.</p>
+
+      <div class="intake-card">
+        <div class="intake-tabs" role="tablist">
+          <button class="intake-tab active" data-tab="upload" role="tab" aria-selected="true">Upload a file</button>
+          <button class="intake-tab" data-tab="paste" role="tab" aria-selected="false">Paste text</button>
+        </div>
+
+        <div id="tab-upload" class="tab-panel active" role="tabpanel">
+          <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Upload a document">
+            <div class="dropzone-inner">
+              <div class="dropzone-icon">⬆</div>
+              <p class="dropzone-title">Drag &amp; drop your document</p>
+              <p class="dropzone-hint">or <span class="link">browse files</span> — PDF, Word (.docx), TXT or Markdown</p>
+            </div>
+            <div class="dropzone-progress" id="parse-progress" hidden>
+              <div class="spinner"></div>
+              <p id="parse-status">Reading your document…</p>
+            </div>
+          </div>
+          <input type="file" id="file-input" accept=".pdf,.docx,.txt,.md,.markdown,text/plain,application/pdf" hidden>
+        </div>
+
+        <div id="tab-paste" class="tab-panel" role="tabpanel">
+          <textarea id="paste-input" class="paste-input" rows="8"
+            placeholder="Paste anything — an article, an essay, meeting notes…"></textarea>
+          <div class="paste-actions">
+            <button id="paste-go" class="btn btn-primary">Read it ✨</button>
+          </div>
+        </div>
+
+        <div class="intake-footer">
+          <button id="sample-btn" class="btn-ghost">No file handy? Try a sample →</button>
+        </div>
+      </div>
+
+      <ul class="feature-row" aria-label="Features">
+        <li><span class="feature-emoji">🎧</span><strong>Listen</strong><span>Natural read-aloud with live word highlighting</span></li>
+        <li><span class="feature-emoji">⚡</span><strong>Flow</strong><span>One word at a time, up to 1000 words per minute</span></li>
+        <li><span class="feature-emoji">🔒</span><strong>Private</strong><span>Everything happens in your browser — nothing is uploaded</span></li>
+      </ul>
+    </section>
+
+    <footer class="landing-footer">Made for people who love reading — or want to.</footer>
+  </main>
+
+  <!-- ======== Reader ======== -->
+  <div id="reader" class="reader" hidden>
+    <div class="reader-progress"><div id="reader-progress-bar" class="reader-progress-bar"></div></div>
+
+    <header class="reader-header">
+      <button id="back-btn" class="icon-btn" title="Back to start" aria-label="Back">←</button>
+      <div class="doc-meta">
+        <span id="doc-title" class="doc-title">Document</span>
+        <span id="doc-stats" class="doc-stats"></span>
+      </div>
+      <div class="reader-header-actions">
+        <button id="theme-toggle-2" class="icon-btn" title="Toggle theme" aria-label="Toggle theme">
+          <span class="theme-icon-dark">☾</span><span class="theme-icon-light">☀</span>
+        </button>
+        <button id="settings-btn" class="icon-btn" title="Reading settings" aria-label="Settings">⚙</button>
+      </div>
+    </header>
+
+    <article id="text-container" class="text-container"></article>
+
+    <div class="control-dock">
+      <button id="skip-back" class="dock-btn" title="Back one sentence (←)">⏮</button>
+      <button id="listen-btn" class="dock-btn dock-btn-primary" title="Listen (space)">
+        <span class="listen-icon-play">▶</span><span class="listen-icon-stop">■</span>
+        <span class="dock-btn-label">Listen</span>
+      </button>
+      <button id="skip-fwd" class="dock-btn" title="Forward one sentence (→)">⏭</button>
+      <span class="dock-divider"></span>
+      <button id="focus-btn" class="dock-btn dock-btn-accent" title="Focus mode (F)">
+        <span>◉</span><span class="dock-btn-label">Focus</span>
+      </button>
+    </div>
+
+    <div id="settings-panel" class="settings-panel" hidden>
+      <h3>Reading settings</h3>
+      <label class="setting">
+        <span>Typeface</span>
+        <div class="segmented">
+          <button data-font="serif" class="active">Serif</button>
+          <button data-font="sans">Sans</button>
+        </div>
+      </label>
+      <label class="setting">
+        <span>Text size <em id="fontsize-val">21px</em></span>
+        <input type="range" id="fontsize-range" min="16" max="30" value="21">
+      </label>
+      <label class="setting">
+        <span>Voice</span>
+        <select id="voice-select"></select>
+      </label>
+      <label class="setting">
+        <span>Speech rate <em id="rate-val">1.0×</em></span>
+        <input type="range" id="rate-range" min="0.5" max="2" step="0.1" value="1">
+      </label>
+      <label class="setting">
+        <span>Focus speed <em id="wpm-val">320 wpm</em></span>
+        <input type="range" id="wpm-range" min="100" max="1000" step="20" value="320">
+      </label>
+      <p class="settings-hint">Tip: click any word in the text to start from there.<br>
+        Shortcuts: <kbd>space</kbd> listen · <kbd>F</kbd> focus · <kbd>←</kbd>/<kbd>→</kbd> skip</p>
+    </div>
+  </div>
+
+  <!-- ======== Focus (RSVP) overlay ======== -->
+  <div id="rsvp" class="rsvp" hidden>
+    <div class="rsvp-top">
+      <div class="rsvp-wpm">
+        <button id="rsvp-slower" class="icon-btn" title="Slower (↓)">−</button>
+        <span id="rsvp-wpm-label">320 wpm</span>
+        <button id="rsvp-faster" class="icon-btn" title="Faster (↑)">+</button>
+      </div>
+      <button id="rsvp-close" class="icon-btn" title="Exit focus mode (esc)">✕</button>
+    </div>
+
+    <div class="rsvp-stage">
+      <div class="rsvp-guide rsvp-guide-top"><span class="rsvp-notch"></span></div>
+      <div id="rsvp-word" class="rsvp-word">
+        <span class="rsvp-before"></span><span class="rsvp-orp"></span><span class="rsvp-after"></span>
+      </div>
+      <div class="rsvp-guide rsvp-guide-bottom"><span class="rsvp-notch"></span></div>
+      <p id="rsvp-context" class="rsvp-context"></p>
+    </div>
+
+    <div class="rsvp-bottom">
+      <div class="rsvp-progress"><div id="rsvp-progress-bar" class="rsvp-progress-bar"></div></div>
+      <div class="rsvp-controls">
+        <button id="rsvp-back" class="dock-btn" title="Back one sentence (←)">⏮</button>
+        <button id="rsvp-toggle" class="dock-btn dock-btn-primary" title="Play / pause (space)">
+          <span class="rsvp-icon-play">▶</span><span class="rsvp-icon-pause">❚❚</span>
+        </button>
+        <button id="rsvp-fwd" class="dock-btn" title="Forward one sentence (→)">⏭</button>
+      </div>
+      <p class="rsvp-hint"><kbd>space</kbd> play/pause · <kbd>←</kbd>/<kbd>→</kbd> sentence · <kbd>↑</kbd>/<kbd>↓</kbd> speed · <kbd>esc</kbd> exit</p>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status" hidden></div>
+
+  <script src="app.js" defer></script>
+</body>
+</html>
