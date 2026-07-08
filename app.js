@@ -932,6 +932,11 @@ Reading was never supposed to be a chore. It was supposed to feel like this.`;
       rsvp.pause();
       tts.start(state.currentWord);
     });
+    // Tap the stage to play/pause — the natural gesture on touch screens.
+    $('.rsvp-stage').addEventListener('click', () => {
+      if (tts.speaking) tts.stop();
+      else rsvp.toggle();
+    });
     $('.rsvp-progress').addEventListener('click', (e) => {
       const rect = e.currentTarget.getBoundingClientRect();
       const frac = (e.clientX - rect.left) / rect.width;

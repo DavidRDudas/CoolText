@@ -2,7 +2,7 @@
 <html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>CoolText — Make PDFs cool again</title>
   <meta name="description" content="Upload a PDF, Word doc, or paste text. CoolText reads it aloud and presents it beautifully — word by word, at your pace.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -53,8 +53,8 @@
 
       <div class="intake-card">
         <div class="intake-tabs" role="tablist">
-          <button class="intake-tab active" data-tab="upload" role="tab" aria-selected="true">Upload a file</button>
-          <button class="intake-tab" data-tab="paste" role="tab" aria-selected="false">Paste text</button>
+          <button class="intake-tab active" data-tab="upload" role="tab" aria-selected="true">Upload</button>
+          <button class="intake-tab" data-tab="paste" role="tab" aria-selected="false">Paste</button>
           <button class="intake-tab" data-tab="url" role="tab" aria-selected="false">From a URL</button>
         </div>
 
@@ -181,8 +181,8 @@
         <span>Focus speed <em id="wpm-val">320 wpm</em></span>
         <input type="range" id="wpm-range" min="100" max="1000" step="20" value="320">
       </label>
-      <p class="settings-hint">Tip: click any word in the text to start from there.<br>
-        Shortcuts: <kbd>space</kbd> listen · <kbd>F</kbd> focus · <kbd>←</kbd>/<kbd>→</kbd> skip</p>
+      <p class="settings-hint">Tip: tap any word in the text to start from there.<span class="kbd-hints"><br>
+        Shortcuts: <kbd>space</kbd> listen · <kbd>F</kbd> focus · <kbd>←</kbd>/<kbd>→</kbd> skip</span></p>
     </div>
   </div>
 
