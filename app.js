@@ -655,15 +655,23 @@
     populateVoices() {
       const voices = speechSynthesis.getVoices();
       if (!voices.length) return;
-      els.voiceSelect.replaceChildren(...voices
-        .filter((v) => v.lang.startsWith(navigator.language.slice(0, 2)) || v.lang.startsWith('en'))
-        .map((v) => {
-          const opt = document.createElement('option');
-          opt.value = v.voiceURI;
-          opt.textContent = `${v.name} (${v.lang})`;
-          if (v.voiceURI === state.voiceURI || (!state.voiceURI && v.default)) opt.selected = true;
-          return opt;
-        }));
+      const list = voices.filter((v) =>
+        v.lang.startsWith(navigator.language.slice(0, 2)) || v.lang.startsWith('en'));
+      if (!list.length) return;
+      // Prefer a local voice: network voices (e.g. Chrome's "Google …" ones)
+      // never fire word-boundary events, which breaks live highlighting.
+      if (!state.voiceURI) {
+        const preferred = list.find((v) => v.localService && v.default) ||
+          list.find((v) => v.localService) || list.find((v) => v.default) || list[0];
+        state.voiceURI = preferred.voiceURI;
+      }
+      els.voiceSelect.replaceChildren(...list.map((v) => {
+        const opt = document.createElement('option');
+        opt.value = v.voiceURI;
+        opt.textContent = `${v.name} (${v.lang})`;
+        if (v.voiceURI === state.voiceURI) opt.selected = true;
+        return opt;
+      }));
     },
 
     start(fromWord) {
@@ -707,8 +715,26 @@
       const voice = speechSynthesis.getVoices().find((v) => v.voiceURI === state.voiceURI);
       if (voice) utt.voice = voice;
 
+      this.boundarySeen = false;
+
+      utt.onstart = () => {
+        // Some voices (notably Chrome's network voices) never fire word
+        // boundaries. If none arrive shortly, fall back to estimated timing.
+        clearTimeout(this.graceTimer);
+        if (this.boundarySupported === false) { this.startEstimator(chunk); return; }
+        this.graceTimer = setTimeout(() => {
+          if (this.speaking && !this.boundarySeen) {
+            this.boundarySupported = false;
+            this.startEstimator(chunk);
+          }
+        }, 450);
+      };
       utt.onboundary = (e) => {
         if (e.name && e.name !== 'word') return;
+        this.boundarySeen = true;
+        this.boundarySupported = true;
+        clearTimeout(this.graceTimer);
+        this.stopEstimator();
         const abs = chunk.absStart + e.charIndex;
         const wi = wordIndexAt(abs);
         if (wi < 0) return;
@@ -718,7 +744,12 @@
         if (delta > 0 && delta <= 5) stats.addWords(delta);
         this.lastBoundaryWord = wi;
       };
-      utt.onend = () => { this.chunkIdx++; this.speakNext(); };
+      utt.onend = () => {
+        clearTimeout(this.graceTimer);
+        this.stopEstimator();
+        this.chunkIdx++;
+        this.speakNext();
+      };
       utt.onerror = (e) => {
         if (e.error === 'canceled' || e.error === 'interrupted') return;
         this.stop();
@@ -727,8 +758,39 @@
       speechSynthesis.speak(utt);
     },
 
+    // Fallback highlighting: advance word by word on a timer, pacing each
+    // word by its length. Resyncs to the true position at every sentence,
+    // since each chunk's estimator starts from that chunk's first word.
+    startEstimator(chunk) {
+      this.stopEstimator();
+      const from = wordIndexAt(chunk.absStart);
+      const to = wordIndexAt(chunk.absStart + chunk.text.length - 1);
+      if (from < 0 || to < from) return;
+      const words = doc.words.slice(from, to + 1);
+      const totalChars = words.reduce((sum, w) => sum + w.text.length + 1, 0);
+      // ~170 wpm is a typical synthesis pace at rate 1.
+      const totalMs = words.length * (60000 / (170 * state.rate));
+      let i = from;
+      const step = () => {
+        if (!this.speaking) return;
+        setCurrentWord(i);
+        const delta = i - this.lastBoundaryWord;
+        if (delta > 0 && delta <= 5) stats.addWords(delta);
+        this.lastBoundaryWord = i;
+        const dwell = totalMs * ((doc.words[i].text.length + 1) / totalChars);
+        i++;
+        if (i > to) return;
+        this.estimTimer = setTimeout(step, dwell);
+      };
+      step();
+    },
+
+    stopEstimator() { clearTimeout(this.estimTimer); },
+
     stop() {
       this.speaking = false;
+      clearTimeout(this.graceTimer);
+      this.stopEstimator();
       els.reader.classList.remove('speaking');
       document.body.classList.remove('speaking');
       stats.endActive();
